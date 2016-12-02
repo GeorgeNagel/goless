@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"io/ioutil"
+	"time"
 )
 
 func main() {
@@ -25,7 +26,7 @@ func main() {
 
 	fmt.Println(sha)
 
-	result, err := popJob(conn, "update_google_accounts", "test-worker", sha)
+	result, err := popJob(conn, "test_queue", "test-worker", sha)
 	if err != nil {
 		panic(err)
 	}
@@ -42,10 +43,14 @@ func main() {
 	// 	}
 	// }
 
+	//EVALSHA 663a5321ee332d15cedc77d5a5d7404e53c9dc6e 0 'pop' 1 'test-queue' 'test-worker' 1
+
 }
 
 func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (string, error) {
-	result, err := redis.String(conn.Do("EVALSHA", scriptSha, "pop", queue, worker, 1))
+	now := time.Now()
+	seconds := now.Unix()
+	result, err := redis.String(conn.Do("EVALSHA", scriptSha, 0, "pop", seconds, queue, worker, 1))
 	return result, err
 }
 
