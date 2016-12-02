@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"io/ioutil"
+	"reflect"
 	"time"
 )
 
@@ -30,8 +32,29 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(result)
+	fmt.Println(string(result))
+	fmt.Println(reflect.TypeOf(result))
 
+	type Message struct {
+		jid string
+	}
+	var m []interface{}
+	err = json.Unmarshal(result, &m)
+	if err != nil {
+		fmt.Println("Can't unmarshal")
+		panic(err)
+	}
+	fmt.Printf("%+v\n\n", m)
+
+	job := m[0]
+	fmt.Println(job)
+
+	jobMap, ok := job.(map[string]interface{})
+	if !ok {
+		panic("AAAHHH!!!")
+	}
+	klass := jobMap["klass"]
+	fmt.Println(klass)
 	// // Get job ids in queue
 	// jobs, err := redis.Strings(conn.Do("ZRANGE", "ql:q:audit_events-work", "0", "100"))
 	// fmt.Printf("Jobs: %s\n", jobs)
@@ -47,10 +70,10 @@ func main() {
 
 }
 
-func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (string, error) {
+func popJob(conn redis.Conn, queue string, worker string, scriptSha string) ([]byte, error) {
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.String(conn.Do("EVALSHA", scriptSha, 0, "pop", seconds, queue, worker, 1))
+	result, err := redis.Bytes(conn.Do("EVALSHA", scriptSha, 0, "pop", seconds, queue, worker, 1))
 	return result, err
 }
 
