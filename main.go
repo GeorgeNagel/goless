@@ -2,10 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"io/ioutil"
-	"reflect"
 	"time"
 )
 
@@ -28,31 +28,11 @@ func main() {
 
 	fmt.Println(sha)
 
-	result, err := popJob(conn, "test_queue", "test-worker", sha)
+	jobMap, err := popJob(conn, "test_queue", "test-worker", sha)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(string(result))
-	fmt.Println(reflect.TypeOf(result))
 
-	type Message struct {
-		jid string
-	}
-	var m []interface{}
-	err = json.Unmarshal(result, &m)
-	if err != nil {
-		fmt.Println("Can't unmarshal")
-		panic(err)
-	}
-	fmt.Printf("%+v\n\n", m)
-
-	job := m[0]
-	fmt.Println(job)
-
-	jobMap, ok := job.(map[string]interface{})
-	if !ok {
-		panic("AAAHHH!!!")
-	}
 	klass := jobMap["klass"]
 	fmt.Println(klass)
 	// // Get job ids in queue
@@ -70,11 +50,23 @@ func main() {
 
 }
 
-func popJob(conn redis.Conn, queue string, worker string, scriptSha string) ([]byte, error) {
+func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (map[string]interface{}, error) {
 	now := time.Now()
 	seconds := now.Unix()
 	result, err := redis.Bytes(conn.Do("EVALSHA", scriptSha, 0, "pop", seconds, queue, worker, 1))
-	return result, err
+
+	var jobs []interface{}
+	err = json.Unmarshal(result, &jobs)
+	if err != nil {
+		return nil, err
+	}
+
+	jobMap, ok := jobs[0].(map[string]interface{})
+	if !ok {
+		err = errors.New("Could not cast to interface")
+		return nil, err
+	}
+	return jobMap, err
 }
 
 func loadLuaScript(script string, conn redis.Conn) (string, error) {
