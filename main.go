@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,28 +33,23 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	if jobMap == nil {
+		fmt.Println("No jobs on the queue")
+		return
+	}
 
 	klass := jobMap["klass"]
 	fmt.Println(klass)
-	// // Get job ids in queue
-	// jobs, err := redis.Strings(conn.Do("ZRANGE", "ql:q:audit_events-work", "0", "100"))
-	// fmt.Printf("Jobs: %s\n", jobs)
-
-	// for _, j := range jobs {
-	// 	err = printJob(conn, j)
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-	// }
-
-	//EVALSHA 663a5321ee332d15cedc77d5a5d7404e53c9dc6e 0 'pop' 1 'test-queue' 'test-worker' 1
-
 }
 
 func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (map[string]interface{}, error) {
 	now := time.Now()
 	seconds := now.Unix()
 	result, err := redis.Bytes(conn.Do("EVALSHA", scriptSha, 0, "pop", seconds, queue, worker, 1))
+	if bytes.Compare(result, []byte("{}")) == 0 {
+		// No jobs on the queue
+		return nil, nil
+	}
 
 	var jobs []interface{}
 	err = json.Unmarshal(result, &jobs)
@@ -77,14 +73,4 @@ func loadLuaScript(script string, conn redis.Conn) (string, error) {
 func readLuaScript() (string, error) {
 	bytes, err := ioutil.ReadFile("./qless.lua")
 	return string(bytes), err
-}
-
-func printJob(conn redis.Conn, jobId string) error {
-	reply, err := redis.StringMap(conn.Do("HGETALL", fmt.Sprintf("ql:j:%s", jobId)))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%s\n", reply)
-
-	return nil
 }
