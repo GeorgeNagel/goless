@@ -37,9 +37,24 @@ func main() {
 		fmt.Println("No jobs on the queue")
 		return
 	}
+	fmt.Println(jobMap)
 
 	klass := jobMap["klass"]
 	fmt.Println(klass)
+
+	jobId, ok := jobMap["jid"].(string)
+	if !ok {
+		panic("NO!")
+	}
+
+	data := jobMap["data"]
+	dataString, ok := data.(string)
+	if !ok {
+		panic("Data not a string")
+	}
+
+	result, err := completeJob(conn, jobId, "test_queue", "test-worker", sha, dataString)
+	fmt.Println(result)
 }
 
 func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (map[string]interface{}, error) {
@@ -63,6 +78,14 @@ func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (map
 		return nil, err
 	}
 	return jobMap, err
+}
+
+func completeJob(conn redis.Conn, jobId string, queue string, worker string, scriptSha string, data string) (string, error) {
+	fmt.Printf("Completing job: %s", jobId)
+	now := time.Now()
+	seconds := now.Unix()
+	result, err := redis.String(conn.Do("EVALSHA", scriptSha, 0, "complete", seconds, jobId, worker, queue, data))
+	return result, err
 }
 
 func loadLuaScript(script string, conn redis.Conn) (string, error) {
