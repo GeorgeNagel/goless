@@ -53,8 +53,13 @@ func main() {
 		panic("Data not a string")
 	}
 
-	result, err := completeJob(conn, jobId, "test_queue", "test-worker", sha, dataString)
-	fmt.Println(result)
+	err = failJob(conn, jobId, "test-worker", sha, "test fail message", dataString)
+	if err != nil {
+		fmt.Println("Failed to fail")
+	}
+
+	// result, err := completeJob(conn, jobId, "test_queue", "test-worker", sha, dataString)
+	// fmt.Println(result)
 }
 
 func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (map[string]interface{}, error) {
@@ -86,6 +91,14 @@ func completeJob(conn redis.Conn, jobId string, queue string, worker string, scr
 	seconds := now.Unix()
 	result, err := redis.String(conn.Do("EVALSHA", scriptSha, 0, "complete", seconds, jobId, worker, queue, data))
 	return result, err
+}
+
+func failJob(conn redis.Conn, jobId string, worker string, scriptSha string, message string, data string) error {
+	now := time.Now()
+	seconds := now.Unix()
+	group := "test fail group"
+	_, err := redis.String(conn.Do("EVALSHA", scriptSha, 0, "fail", seconds, jobId, worker, group, message, data))
+	return err
 }
 
 func loadLuaScript(script string, conn redis.Conn) (string, error) {
