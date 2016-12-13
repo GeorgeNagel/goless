@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"io/ioutil"
+	"log"
+	"os"
 	"time"
+
+	"github.com/garyburd/redigo/redis"
 )
 
 type QConn struct {
@@ -35,19 +38,18 @@ func NewQConn(hostname string, port string, queue string, workerName string) (*Q
 }
 
 func main() {
-
 	conn, err := NewQConn("localhost", "6380", "test_queue", "test-worker")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	jobMap, err := conn.PopJob()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	if jobMap == nil {
 		fmt.Println("No jobs on the queue")
-		return
+		os.Exit(0)
 	}
 	fmt.Println(jobMap)
 
@@ -56,18 +58,18 @@ func main() {
 
 	jobId, ok := jobMap["jid"].(string)
 	if !ok {
-		panic("NO!")
+		log.Fatalf("Job ID \"%v\"is not a string!\n", jobMap["jid"])
 	}
 
 	data := jobMap["data"]
 	dataString, ok := data.(string)
 	if !ok {
-		panic("Data not a string")
+		log.Fatal("Job data not a string!")
 	}
 
 	err = conn.FailJob(jobId, "I am a fail group", "test fail message", dataString)
 	if err != nil {
-		fmt.Println("Failed to fail")
+		log.Fatalf("Unable to fail Job ID %s\n", jobId)
 	}
 
 	// result, _ := conn.CompleteJob(jobId, dataString)
