@@ -10,26 +10,38 @@ import (
 	"time"
 )
 
-func main() {
+type QConn struct {
+	Conn       redis.Conn
+	Queue      string
+	ScriptSha  string
+	WorkerName string
+}
 
-	conn, err := redis.Dial("tcp", fmt.Sprintf("%s:%s", "localhost", "6380"))
+func NewQConn(hostname string, port string, queue string, workerName string) (*QConn, error) {
+	conn, err := redis.Dial("tcp", fmt.Sprintf("%s:%s", hostname, port))
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-
 	script, err := readLuaScript()
 	if err != nil {
-		panic(err)
+		return nil, err
+	}
+	sha, err := loadLuaScript(script, conn)
+	if err != nil {
+		return nil, err
 	}
 
-	sha, err := loadLuaScript(script, conn)
+	return &QConn{Conn: conn, Queue: queue, ScriptSha: sha, WorkerName: workerName}, nil
+}
+
+func main() {
+
+	conn, err := NewQConn("localhost", "6380", "test_queue", "test-worker")
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(sha)
-
-	jobMap, err := popJob(conn, "test_queue", "test-worker", sha)
+	jobMap, err := conn.PopJob()
 	if err != nil {
 		panic(err)
 	}
@@ -53,19 +65,19 @@ func main() {
 		panic("Data not a string")
 	}
 
-	err = failJob(conn, jobId, "test-worker", sha, "test fail message", dataString)
+	err = conn.FailJob(jobId, "I am a fail group", "test fail message", dataString)
 	if err != nil {
 		fmt.Println("Failed to fail")
 	}
 
-	// result, err := completeJob(conn, jobId, "test_queue", "test-worker", sha, dataString)
+	// result, _ := conn.CompleteJob(jobId, dataString)
 	// fmt.Println(result)
 }
 
-func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (map[string]interface{}, error) {
+func (conn *QConn) PopJob() (map[string]interface{}, error) {
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.Bytes(conn.Do("EVALSHA", scriptSha, 0, "pop", seconds, queue, worker, 1))
+	result, err := redis.Bytes(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "pop", seconds, conn.Queue, conn.WorkerName, 1))
 	if bytes.Compare(result, []byte("{}")) == 0 {
 		// No jobs on the queue
 		return nil, nil
@@ -85,19 +97,18 @@ func popJob(conn redis.Conn, queue string, worker string, scriptSha string) (map
 	return jobMap, err
 }
 
-func completeJob(conn redis.Conn, jobId string, queue string, worker string, scriptSha string, data string) (string, error) {
+func (conn *QConn) CompleteJob(jobId string, data string) (string, error) {
 	fmt.Printf("Completing job: %s", jobId)
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.String(conn.Do("EVALSHA", scriptSha, 0, "complete", seconds, jobId, worker, queue, data))
+	result, err := redis.String(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "complete", seconds, jobId, conn.WorkerName, conn.Queue, data))
 	return result, err
 }
 
-func failJob(conn redis.Conn, jobId string, worker string, scriptSha string, message string, data string) error {
+func (conn *QConn) FailJob(jobId string, group string, message string, data string) error {
 	now := time.Now()
 	seconds := now.Unix()
-	group := "test fail group"
-	_, err := redis.String(conn.Do("EVALSHA", scriptSha, 0, "fail", seconds, jobId, worker, group, message, data))
+	_, err := redis.String(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "fail", seconds, jobId, conn.WorkerName, group, message, data))
 	return err
 }
 
