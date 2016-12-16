@@ -67,6 +67,15 @@ func main() {
 		log.Fatal("Job data not a string!")
 	}
 
+	for {
+		time.Sleep(5 * time.Second)
+		result, err := conn.Heartbeat(jobId, dataString)
+		if err != nil {
+			fmt.Printf("Bad heart: %s", err)
+		}
+		fmt.Println(result)
+	}
+
 	err = conn.FailJob(jobId, "I am a fail group", "test fail message", dataString)
 	if err != nil {
 		log.Fatalf("Unable to fail Job ID %s\n", jobId)
@@ -97,6 +106,14 @@ func (conn *QConn) PopJob() (map[string]interface{}, error) {
 		return nil, err
 	}
 	return jobMap, err
+}
+
+func (conn *QConn) Heartbeat(jobId string, data string) (string, error) {
+	fmt.Println("Heartbeating")
+	now := time.Now()
+	seconds := now.Unix()
+	result, err := redis.String(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "heartbeat", seconds, jobId, conn.WorkerName, data))
+	return result, err
 }
 
 func (conn *QConn) CompleteJob(jobId string, data string) (string, error) {
