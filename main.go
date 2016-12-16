@@ -67,12 +67,21 @@ func main() {
 		log.Fatal("Job data not a string!")
 	}
 
-	for {
-		time.Sleep(5 * time.Second)
-		expiresUnixTime, err := conn.Heartbeat(jobId, dataString)
-		if err != nil {
-			fmt.Printf("Bad heart: %s", err)
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			fmt.Println("Heartbeating")
+			_, err := conn.Heartbeat(jobId, dataString)
+			if err != nil {
+				fmt.Printf("Bad heart: %s", err)
+			}
 		}
+	}()
+
+	// pretend to do actual work
+	for i := 0; i < 10; i++ {
+		time.Sleep(20 * time.Second)
+		fmt.Println("Doing some work")
 	}
 
 	// err = conn.FailJob(jobId, "I am a fail group", "test fail message", dataString)
