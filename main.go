@@ -69,20 +69,22 @@ func main() {
 
 	for {
 		time.Sleep(5 * time.Second)
-		result, err := conn.Heartbeat(jobId, dataString)
+		expiresUnixTime, err := conn.Heartbeat(jobId, dataString)
 		if err != nil {
 			fmt.Printf("Bad heart: %s", err)
 		}
-		fmt.Println(result)
 	}
 
-	err = conn.FailJob(jobId, "I am a fail group", "test fail message", dataString)
+	// err = conn.FailJob(jobId, "I am a fail group", "test fail message", dataString)
+	// if err != nil {
+	// 	log.Fatalf("Unable to fail Job ID %s\n", jobId)
+	// }
+
+	result, err := conn.CompleteJob(jobId, dataString)
 	if err != nil {
-		log.Fatalf("Unable to fail Job ID %s\n", jobId)
+		fmt.Printf("Bad complete: %s", err)
 	}
-
-	// result, _ := conn.CompleteJob(jobId, dataString)
-	// fmt.Println(result)
+	fmt.Println(result)
 }
 
 func (conn *QConn) PopJob() (map[string]interface{}, error) {
@@ -108,16 +110,14 @@ func (conn *QConn) PopJob() (map[string]interface{}, error) {
 	return jobMap, err
 }
 
-func (conn *QConn) Heartbeat(jobId string, data string) (string, error) {
-	fmt.Println("Heartbeating")
+func (conn *QConn) Heartbeat(jobId string, data string) (int64, error) {
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.String(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "heartbeat", seconds, jobId, conn.WorkerName, data))
+	result, err := redis.Int64(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "heartbeat", seconds, jobId, conn.WorkerName, data))
 	return result, err
 }
 
 func (conn *QConn) CompleteJob(jobId string, data string) (string, error) {
-	fmt.Printf("Completing job: %s", jobId)
 	now := time.Now()
 	seconds := now.Unix()
 	result, err := redis.String(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "complete", seconds, jobId, conn.WorkerName, conn.Queue, data))
