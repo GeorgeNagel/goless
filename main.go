@@ -37,6 +37,23 @@ func NewQConn(hostname string, port string, queue string, workerName string) (*Q
 	return &QConn{Conn: conn, Queue: queue, ScriptSha: sha, WorkerName: workerName}, nil
 }
 
+func Heartbeat(conn *QConn, jobId string, dataString string, beatPeriod int, jobDone chan string) {
+	for {
+		time.Sleep(time.Duration(beatPeriod) * time.Second)
+		select {
+		case _ = <-jobDone:
+			// We have received a message that the job is done and we can stop heart-beating
+			return
+		default:
+			fmt.Println("Heartbeating")
+			_, err := conn.Heartbeat(jobId, dataString)
+			if err != nil {
+				fmt.Printf("Bad heart: %s", err)
+			}
+		}
+	}
+}
+
 func main() {
 	conn, err := NewQConn("localhost", "6380", "test_queue", "test-worker")
 	if err != nil {
@@ -67,20 +84,12 @@ func main() {
 		log.Fatal("Job data not a string!")
 	}
 
-	go func() {
-		for {
-			time.Sleep(5 * time.Second)
-			fmt.Println("Heartbeating")
-			_, err := conn.Heartbeat(jobId, dataString)
-			if err != nil {
-				fmt.Printf("Bad heart: %s", err)
-			}
-		}
-	}()
+	jobDone := make(chan string)
+	go Heartbeat(conn, jobId, dataString, 5, jobDone)
 
 	// pretend to do actual work
 	for i := 0; i < 10; i++ {
-		time.Sleep(20 * time.Second)
+		time.Sleep(2 * time.Second)
 		fmt.Println("Doing some work")
 	}
 
@@ -94,6 +103,10 @@ func main() {
 		fmt.Printf("Bad complete: %s", err)
 	}
 	fmt.Println(result)
+	jobDone <- "Done!"
+
+	// We should stop heartbeating by this point
+	time.Sleep(200 * time.Second)
 }
 
 func (conn *QConn) PopJob() (map[string]interface{}, error) {

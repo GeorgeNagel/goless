@@ -4,4 +4,4 @@
 set -e
 
 go build
-./qless
+./goless
