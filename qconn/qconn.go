@@ -11,18 +11,26 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-type QConn struct {
-	Conn       redis.Conn
+func newRedisPool(addr string) *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     3,
+		IdleTimeout: 240 * time.Second,
+		Dial:        func() (redis.Conn, error) { return redis.Dial("tcp", addr) },
+	}
+}
+
+type QPool struct {
+	Pool       *redis.Pool
 	Queue      string
 	ScriptSha  string
 	WorkerName string
 }
 
-func NewQConn(hostname string, port string, queue string, workerName string) (*QConn, error) {
-	conn, err := redis.Dial("tcp", fmt.Sprintf("%s:%s", hostname, port))
-	if err != nil {
-		return nil, err
-	}
+func NewQPool(hostname string, port string, queue string, workerName string) (*QPool, error) {
+	pool := newRedisPool(fmt.Sprintf("%s:%s", hostname, port))
+	conn := pool.Get()
+	defer conn.Close()
+
 	script, err := readLuaScript()
 	if err != nil {
 		return nil, err
@@ -32,13 +40,16 @@ func NewQConn(hostname string, port string, queue string, workerName string) (*Q
 		return nil, err
 	}
 
-	return &QConn{Conn: conn, Queue: queue, ScriptSha: sha, WorkerName: workerName}, nil
+	return &QPool{Pool: pool, Queue: queue, ScriptSha: sha, WorkerName: workerName}, nil
 }
 
-func (conn *QConn) PopJob() (map[string]interface{}, error) {
+func (pool *QPool) PopJob() (map[string]interface{}, error) {
+	conn := pool.Pool.Get()
+	defer conn.Close()
+
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.Bytes(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "pop", seconds, conn.Queue, conn.WorkerName, 1))
+	result, err := redis.Bytes(conn.Do("EVALSHA", pool.ScriptSha, 0, "pop", seconds, pool.Queue, pool.WorkerName, 1))
 	if bytes.Compare(result, []byte("{}")) == 0 {
 		// No jobs on the queue
 		return nil, nil
@@ -58,24 +69,33 @@ func (conn *QConn) PopJob() (map[string]interface{}, error) {
 	return jobMap, err
 }
 
-func (conn *QConn) Heartbeat(jobId string, data string) (int64, error) {
+func (connPool *QPool) Heartbeat(jobId string, data string) (int64, error) {
+	conn := connPool.Pool.Get()
+	defer conn.Close()
+
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.Int64(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "heartbeat", seconds, jobId, conn.WorkerName, data))
+	result, err := redis.Int64(conn.Do("EVALSHA", connPool.ScriptSha, 0, "heartbeat", seconds, jobId, connPool.WorkerName, data))
 	return result, err
 }
 
-func (conn *QConn) CompleteJob(jobId string, data string) (string, error) {
+func (connPool *QPool) CompleteJob(jobId string, data string) (string, error) {
+	conn := connPool.Pool.Get()
+	defer conn.Close()
+
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.String(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "complete", seconds, jobId, conn.WorkerName, conn.Queue, data))
+	result, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "complete", seconds, jobId, connPool.WorkerName, connPool.Queue, data))
 	return result, err
 }
 
-func (conn *QConn) FailJob(jobId string, group string, message string, data string) error {
+func (connPool *QPool) FailJob(jobId string, group string, message string, data string) error {
+	conn := connPool.Pool.Get()
+	defer conn.Close()
+
 	now := time.Now()
 	seconds := now.Unix()
-	_, err := redis.String(conn.Conn.Do("EVALSHA", conn.ScriptSha, 0, "fail", seconds, jobId, conn.WorkerName, group, message, data))
+	_, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "fail", seconds, jobId, connPool.WorkerName, group, message, data))
 	return err
 }
 

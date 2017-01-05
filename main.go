@@ -8,7 +8,7 @@ import (
 	"github.com/GeorgeNagel/goless/qconn"
 )
 
-func Heartbeat(conn *qconn.QConn, jobId string, dataString string, beatPeriod int, jobDone chan string) {
+func Heartbeat(connPool *qconn.QPool, jobId string, dataString string, beatPeriod int, jobDone chan string) {
 	for {
 		time.Sleep(time.Duration(beatPeriod) * time.Second)
 		select {
@@ -17,7 +17,7 @@ func Heartbeat(conn *qconn.QConn, jobId string, dataString string, beatPeriod in
 			return
 		default:
 			fmt.Printf("[%s] Heartbeating\n", jobId)
-			_, err := conn.Heartbeat(jobId, dataString)
+			_, err := connPool.Heartbeat(jobId, dataString)
 			if err != nil {
 				fmt.Printf("[%s] Bad heart: %s\n", jobId, err)
 			}
@@ -25,14 +25,37 @@ func Heartbeat(conn *qconn.QConn, jobId string, dataString string, beatPeriod in
 	}
 }
 
+func RunJob(connPool *qconn.QPool, jobId string, dataString string) {
+	jobDone := make(chan string)
+	go Heartbeat(connPool, jobId, dataString, 5, jobDone)
+
+	// pretend to do actual work
+	for i := 0; i < 10; i++ {
+		time.Sleep(2 * time.Second)
+		fmt.Printf("[%s] Doing some work\n", jobId)
+	}
+
+	// Finish the Job
+	result, err := connPool.CompleteJob(jobId, dataString)
+	if err != nil {
+		fmt.Printf("[%s] Bad complete: %s\n", jobId, err)
+	}
+	fmt.Printf("[%s] %s\n", jobId, result)
+	jobDone <- "Done!"
+}
+
 func main() {
-	conn, err := qconn.NewQConn("localhost", "6380", "test_queue", "test-worker")
+	connPool, err := qconn.NewQPool("localhost", "6380", "test_queue", "test-worker")
+	managerConn := connPool.Pool.Get()
+	defer managerConn.Close()
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for {
-		jobMap, err := conn.PopJob()
+		// Get job params
+		jobMap, err := connPool.PopJob()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -54,25 +77,6 @@ func main() {
 			log.Fatal("Job data not a string!")
 		}
 
-		jobDone := make(chan string)
-		go Heartbeat(conn, jobId, dataString, 5, jobDone)
-
-		// pretend to do actual work
-		for i := 0; i < 10; i++ {
-			time.Sleep(2 * time.Second)
-			fmt.Printf("[%s] Doing some work\n", jobId)
-		}
-
-		// err = conn.FailJob(jobId, "I am a fail group", "test fail message", dataString)
-		// if err != nil {
-		// 	log.Fatalf("Unable to fail Job ID %s\n", jobId)
-		// }
-
-		result, err := conn.CompleteJob(jobId, dataString)
-		if err != nil {
-			fmt.Printf("[%s] Bad complete: %s\n", jobId, err)
-		}
-		fmt.Println(result)
-		jobDone <- "Done!"
+		go RunJob(connPool, jobId, dataString)
 	}
 }
