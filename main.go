@@ -16,10 +16,10 @@ func Heartbeat(conn *qconn.QConn, jobId string, dataString string, beatPeriod in
 			// We have received a message that the job is done and we can stop heart-beating
 			return
 		default:
-			fmt.Println("Heartbeating")
+			fmt.Printf("[%s] Heartbeating\n", jobId)
 			_, err := conn.Heartbeat(jobId, dataString)
 			if err != nil {
-				fmt.Printf("Bad heart: %s", err)
+				fmt.Printf("[%s] Bad heart: %s\n", jobId, err)
 			}
 		}
 	}
@@ -37,14 +37,11 @@ func main() {
 			log.Fatal(err)
 		}
 		if jobMap == nil {
-			fmt.Println("No jobs on the queue")
+			fmt.Println("[manager] No jobs on the queue")
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		fmt.Println(jobMap)
-
-		klass := jobMap["klass"]
-		fmt.Println(klass)
+		fmt.Printf("[manager] About to run: %s\n", jobMap)
 
 		jobId, ok := jobMap["jid"].(string)
 		if !ok {
@@ -63,7 +60,7 @@ func main() {
 		// pretend to do actual work
 		for i := 0; i < 10; i++ {
 			time.Sleep(2 * time.Second)
-			fmt.Println("Doing some work")
+			fmt.Printf("[%s] Doing some work\n", jobId)
 		}
 
 		// err = conn.FailJob(jobId, "I am a fail group", "test fail message", dataString)
@@ -73,7 +70,7 @@ func main() {
 
 		result, err := conn.CompleteJob(jobId, dataString)
 		if err != nil {
-			fmt.Printf("Bad complete: %s", err)
+			fmt.Printf("[%s] Bad complete: %s\n", jobId, err)
 		}
 		fmt.Println(result)
 		jobDone <- "Done!"
