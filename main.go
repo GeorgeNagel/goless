@@ -46,8 +46,6 @@ func RunJob(connPool *qconn.QPool, jobId string, dataString string) {
 
 func main() {
 	connPool, err := qconn.NewQPool("localhost", "6380", "test_queue", "test-worker")
-	managerConn := connPool.Pool.Get()
-	defer managerConn.Close()
 
 	if err != nil {
 		log.Fatal(err)
