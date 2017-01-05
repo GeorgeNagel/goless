@@ -8,11 +8,11 @@ import (
 	"github.com/GeorgeNagel/goless/qconn"
 )
 
-func Heartbeat(connPool *qconn.QPool, jobId string, dataString string, beatPeriod int, jobDone chan string) {
+func Heartbeat(connPool *qconn.QPool, jobId string, dataString string, beatPeriod int, stopHeartbeat chan string) {
 	for {
 		time.Sleep(time.Duration(beatPeriod) * time.Second)
 		select {
-		case _ = <-jobDone:
+		case _ = <-stopHeartbeat:
 			// We have received a message that the job is done and we can stop heart-beating
 			return
 		default:
@@ -26,8 +26,8 @@ func Heartbeat(connPool *qconn.QPool, jobId string, dataString string, beatPerio
 }
 
 func RunJob(connPool *qconn.QPool, jobId string, dataString string) {
-	jobDone := make(chan string)
-	go Heartbeat(connPool, jobId, dataString, 5, jobDone)
+	stopHeartbeat := make(chan string)
+	go Heartbeat(connPool, jobId, dataString, 5, stopHeartbeat)
 
 	// pretend to do actual work
 	for i := 0; i < 10; i++ {
@@ -36,12 +36,14 @@ func RunJob(connPool *qconn.QPool, jobId string, dataString string) {
 	}
 
 	// Finish the Job
+	// Stop heartbeater before telling qless server that we're done
+	// in order to avoid heartbeating for a completed job
+	stopHeartbeat <- "Done!"
 	result, err := connPool.CompleteJob(jobId, dataString)
 	if err != nil {
 		fmt.Printf("[%s] Bad complete: %s\n", jobId, err)
 	}
 	fmt.Printf("[%s] %s\n", jobId, result)
-	jobDone <- "Done!"
 }
 
 func main() {
