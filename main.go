@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/GeorgeNagel/goless/qconn"
@@ -19,7 +20,15 @@ func Heartbeat(connPool *qconn.QPool, jobId string, dataString string, beatPerio
 			fmt.Printf("[%s] Heartbeating\n", jobId)
 			_, err := connPool.Heartbeat(jobId, dataString)
 			if err != nil {
-				fmt.Printf("[%s] Bad heart: %s\n", jobId, err)
+				errMessage := err.Error()
+
+				// "Job does not exist" corresponds to a job canceled in Qless,
+				// which qless returns as an error to the heartbeat check-in
+				if !strings.Contains(errMessage, "Job does not exist") {
+					fmt.Printf("[%s] Unexpected heartbeat error: %s\n", jobId, errMessage)
+				}
+				stopHeartbeat <- "Bad heartbeat/Job canceled"
+				return
 			}
 		}
 	}
@@ -31,8 +40,14 @@ func RunJob(connPool *qconn.QPool, jobId string, dataString string) {
 
 	// pretend to do actual work
 	for i := 0; i < 10; i++ {
-		time.Sleep(2 * time.Second)
-		fmt.Printf("[%s] Doing some work\n", jobId)
+		select {
+		case _ = <-stopHeartbeat:
+			fmt.Printf("[%s]Heart stopped. Killing job.\n", jobId)
+			return
+		default:
+			fmt.Printf("[%s] Doing a unit of work\n", jobId)
+			time.Sleep(2 * time.Second)
+		}
 	}
 
 	// Finish the Job
