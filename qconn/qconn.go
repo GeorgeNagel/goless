@@ -172,12 +172,22 @@ func (connPool *QPool) FailJob(job *Job, group string, message string) error {
 	return err
 }
 
+func (connPool *QPool) ScheduleJob(queue string, jobId string, klass string, data string, delay string) error {
+	conn := connPool.Pool.Get()
+	defer conn.Close()
+
+	now := time.Now()
+	seconds := now.Unix()
+	_, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "put", seconds, "me", queue, jobId, klass, data, delay))
+	return err
+}
+
 func loadLuaScript(script string, conn redis.Conn) (string, error) {
 	sha, err := redis.String(conn.Do("SCRIPT", "LOAD", script))
 	return sha, err
 }
 
 func readLuaScript() (string, error) {
-	bytes, err := ioutil.ReadFile("./qless.lua")
+	bytes, err := ioutil.ReadFile("../../qless.lua")
 	return string(bytes), err
 }
