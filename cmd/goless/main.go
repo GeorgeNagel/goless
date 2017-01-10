@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/GeorgeNagel/goless/qconn"
@@ -15,7 +16,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	var numberOfJobsMutex = &qconn.JobCounter{Mutex: &sync.Mutex{}, Count: 0}
+
 	for {
+		fmt.Println(numberOfJobsMutex.Read())
 		// Get job params
 		job, err := connPool.PopJob()
 		if err != nil {
@@ -28,6 +32,6 @@ func main() {
 		}
 		fmt.Printf("[manager] About to run: %s\n", job)
 
-		go job.Run(connPool)
+		go job.Run(connPool, numberOfJobsMutex)
 	}
 }

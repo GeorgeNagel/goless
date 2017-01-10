@@ -35,9 +35,11 @@ type Job struct {
 	data string
 }
 
-func (job *Job) Run(connPool *QPool) {
+func (job *Job) Run(connPool *QPool, counter *JobCounter) {
 	stopHeartbeat := make(chan string)
 	go job.Heartbeat(connPool, 5, stopHeartbeat)
+	counter.Incr()
+	defer counter.Decr()
 
 	// pretend to do actual work
 	for i := 0; i < 10; i++ {
