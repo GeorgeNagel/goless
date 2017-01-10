@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
+
+	"github.com/satori/go.uuid"
 
 	"github.com/GeorgeNagel/goless/qconn"
 )
@@ -13,11 +16,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	jobId := "12345"
+	uuid := uuid.NewV4().String()
+	jobId := strings.Replace(uuid, "-", "", -1)
+
 	queue := "test_queue"
 	data := "{\"foo\": true}"
 	klass := "Fake::Ruby::Class"
-	delay := "30"
+	delay := "0"
 	err = connPool.ScheduleJob(queue, jobId, klass, data, delay)
 	if err != nil {
 		log.Fatal(err)
