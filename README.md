@@ -1,5 +1,5 @@
 # Goless - More jobs, for less!
-Goless is a Go client for the [Qless job queueing system](https://github.com/seomoz/qless).
+Goless is a Go client for [Qless](https://github.com/seomoz/qless).
 
 ## Build and run the worker
 
