@@ -17,7 +17,7 @@ go build
 ./scheduler
 ```
 
-# Terminate a job
+## Terminate a job
 
 ```bash
 cd cmd/stopjob
