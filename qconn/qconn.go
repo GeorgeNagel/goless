@@ -105,7 +105,7 @@ func (connPool *QPool) FailJob(job *Job, group string, message string) error {
 
 	now := time.Now()
 	seconds := now.Unix()
-	_, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "fail", seconds, job.id, connPool.WorkerName, group, message, job.data))
+	_, err := conn.Do("EVALSHA", connPool.ScriptSha, 0, "fail", seconds, job.id, connPool.WorkerName, group, message, job.data)
 	return err
 }
 
@@ -115,7 +115,17 @@ func (connPool *QPool) ScheduleJob(queue string, jobId string, klass string, dat
 
 	now := time.Now()
 	seconds := now.Unix()
-	_, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "put", seconds, "me", queue, jobId, klass, data, delay))
+	_, err := conn.Do("EVALSHA", connPool.ScriptSha, 0, "put", seconds, "me", queue, jobId, klass, data, delay)
+	return err
+}
+
+func (connPool *QPool) StopJob(jobId string) error {
+	conn := connPool.Pool.Get()
+	defer conn.Close()
+
+	now := time.Now()
+	seconds := now.Unix()
+	_, err := conn.Do("EVALSHA", connPool.ScriptSha, 0, "cancel", seconds, jobId)
 	return err
 }
 

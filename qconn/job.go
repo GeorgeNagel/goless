@@ -47,8 +47,12 @@ func (job *Job) Heartbeat(connPool *QPool, beatPeriod int, heartbeatPhone chan s
 
 		// Channel closure is the job telling us to stop heart-beating,
 		// either through job completion or a panic.
-		_, channelOpen := <-heartbeatPhone
-		if channelOpen {
+		select {
+		case <-heartbeatPhone:
+			// If we got here, the channel was closed
+			// The job has told us to stop
+			return
+		default:
 			fmt.Printf("[%s] Heartbeating\n", job.id)
 			_, err := connPool.Heartbeat(job)
 			if err != nil {
@@ -64,9 +68,6 @@ func (job *Job) Heartbeat(connPool *QPool, beatPeriod int, heartbeatPhone chan s
 				heartbeatPhone <- "Bad heartbeat/Job canceled"
 				return
 			}
-		} else {
-			// The job has told us to stop
-			return
 		}
 	}
 }

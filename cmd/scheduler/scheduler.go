@@ -12,10 +12,10 @@ import (
 
 func main() {
 	connPool, err := qconn.NewQPool("localhost", "6380", "test_queue", "test-worker")
-
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	uuid := uuid.NewV4().String()
 	jobId := strings.Replace(uuid, "-", "", -1)
 
