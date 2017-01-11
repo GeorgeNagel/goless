@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/satori/go.uuid"
@@ -11,7 +12,12 @@ import (
 )
 
 func main() {
-	connPool, err := qconn.NewQPool("localhost", "6380", "test_queue", "test-worker")
+	if len(os.Args) < 2 {
+		log.Fatal("Must specify queue.")
+	}
+	queue := os.Args[1]
+
+	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -19,7 +25,6 @@ func main() {
 	uuid := uuid.NewV4().String()
 	jobId := strings.Replace(uuid, "-", "", -1)
 
-	queue := "test_queue"
 	data := "{\"foo\": true}"
 	klass := "Fake::Ruby::Class"
 	delay := "0"

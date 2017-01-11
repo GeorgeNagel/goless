@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -10,7 +11,12 @@ import (
 )
 
 func main() {
-	connPool, err := qconn.NewQPool("localhost", "6380", "test_queue", "test-worker")
+	if len(os.Args) < 2 {
+		log.Fatal("Must specify queue.")
+	}
+	queue := os.Args[1]
+
+	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
 
 	if err != nil {
 		log.Fatal(err)
