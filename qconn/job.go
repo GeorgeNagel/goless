@@ -12,15 +12,17 @@ type Job struct {
 }
 
 func (job *Job) Run(connPool *QPool, counter *JobCounter) {
-	stopHeartbeat := make(chan string)
-	go job.Heartbeat(connPool, 5, stopHeartbeat)
+	heartbeatPhone := make(chan string)
+	defer close(heartbeatPhone)
+
+	go job.Heartbeat(connPool, 5, heartbeatPhone)
 	counter.Incr()
 	defer counter.Decr()
 
 	// pretend to do actual work
 	for i := 0; i < 10; i++ {
 		select {
-		case _ = <-stopHeartbeat:
+		case _ = <-heartbeatPhone:
 			fmt.Printf("[%s]Heart stopped. Killing job.\n", job.id)
 			return
 		default:
@@ -32,7 +34,6 @@ func (job *Job) Run(connPool *QPool, counter *JobCounter) {
 	// Finish the Job
 	// Stop heartbeater before telling qless server that we're done
 	// in order to avoid heartbeating for a completed job
-	stopHeartbeat <- "Done!"
 	result, err := connPool.CompleteJob(job)
 	if err != nil {
 		fmt.Printf("[%s] Bad complete: %s\n", job.id, err)
@@ -40,14 +41,14 @@ func (job *Job) Run(connPool *QPool, counter *JobCounter) {
 	fmt.Printf("[%s] %s\n", job.id, result)
 }
 
-func (job *Job) Heartbeat(connPool *QPool, beatPeriod int, stopHeartbeat chan string) {
+func (job *Job) Heartbeat(connPool *QPool, beatPeriod int, heartbeatPhone chan string) {
 	for {
 		time.Sleep(time.Duration(beatPeriod) * time.Second)
-		select {
-		case _ = <-stopHeartbeat:
-			// We have received a message that the job is done and we can stop heart-beating
-			return
-		default:
+
+		// Channel closure is the job telling us to stop heart-beating,
+		// either through job completion or a panic.
+		_, channelOpen := <-heartbeatPhone
+		if channelOpen {
 			fmt.Printf("[%s] Heartbeating\n", job.id)
 			_, err := connPool.Heartbeat(job)
 			if err != nil {
@@ -58,9 +59,14 @@ func (job *Job) Heartbeat(connPool *QPool, beatPeriod int, stopHeartbeat chan st
 				if !strings.Contains(errMessage, "Job does not exist") {
 					fmt.Printf("[%s] Unexpected heartbeat error: %s\n", job.id, errMessage)
 				}
-				stopHeartbeat <- "Bad heartbeat/Job canceled"
+				// This is how we tell the job that heart-beating is having
+				// a problem and that the job should stop.
+				heartbeatPhone <- "Bad heartbeat/Job canceled"
 				return
 			}
+		} else {
+			// The job has told us to stop
+			return
 		}
 	}
 }

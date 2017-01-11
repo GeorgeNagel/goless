@@ -19,14 +19,14 @@ func main() {
 	var numberOfJobsMutex = &qconn.JobCounter{Mutex: &sync.Mutex{}, Count: 0}
 
 	for {
-		fmt.Println(numberOfJobsMutex.Read())
+		fmt.Printf("[manager] Number of jobs running: %d\n", numberOfJobsMutex.Read())
 		// Get job params
 		job, err := connPool.PopJob()
 		if err != nil {
 			log.Fatal(err)
 		}
 		if job == nil {
-			fmt.Println("[manager] No jobs on the queue")
+			fmt.Printf("[manager] Job queue %s empty\n", connPool.Queue)
 			time.Sleep(10 * time.Second)
 			continue
 		}
