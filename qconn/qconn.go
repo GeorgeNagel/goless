@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"strings"
 	"time"
@@ -94,11 +93,7 @@ func NewQPool(hostname string, port string, queue string, workerName string) (*Q
 	conn := pool.Get()
 	defer conn.Close()
 
-	script, err := readLuaScript()
-	if err != nil {
-		return nil, err
-	}
-	sha, err := loadLuaScript(script, conn)
+	sha, err := loadLuaScript(luaScript, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -187,9 +182,4 @@ func (connPool *QPool) ScheduleJob(queue string, jobId string, klass string, dat
 func loadLuaScript(script string, conn redis.Conn) (string, error) {
 	sha, err := redis.String(conn.Do("SCRIPT", "LOAD", script))
 	return sha, err
-}
-
-func readLuaScript() (string, error) {
-	bytes, err := ioutil.ReadFile("../../qless.lua")
-	return string(bytes), err
 }
