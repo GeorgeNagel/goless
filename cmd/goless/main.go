@@ -16,6 +16,8 @@ func main() {
 	}
 	queue := os.Args[1]
 
+	MAX_JOBS := 2
+
 	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
 
 	if err != nil {
@@ -27,7 +29,13 @@ func main() {
 	for {
 		fmt.Printf("[manager] Number of jobs running: %d\n", numberOfJobsMutex.Read())
 		// Get job params
+		if numberOfJobsMutex.Read() >= MAX_JOBS {
+			fmt.Println("[manager] Running jobs at maximum capacity.")
+			time.Sleep(10 * time.Second)
+			continue
+		}
 		job, err := connPool.PopJob()
+
 		if err != nil {
 			log.Fatal(err)
 		}
