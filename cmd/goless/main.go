@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,7 +17,18 @@ func main() {
 	}
 	queue := os.Args[1]
 
-	MAX_JOBS := 2
+	string_max_jobs := os.Getenv("MAX_JOBS")
+
+	var MAX_JOBS = 2
+	if string_max_jobs != "" {
+		MAX_JOBS, err := strconv.Atoi(string_max_jobs)
+
+		if err != nil {
+			log.Fatalf("Invlid MAX_JOBS count: %s, %v \n", string_max_jobs, err)
+		}
+	}
+
+	fmt.Printf("Current max jobs: %s \n", MAX_JOBS)
 
 	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
 
