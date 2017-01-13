@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 
 	"github.com/satori/go.uuid"
@@ -12,10 +12,9 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatal("Must specify queue.")
-	}
-	queue := os.Args[1]
+	var queue string
+	flag.StringVar(&queue, "q", "test", "queue name")
+	flag.Parse()
 
 	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
 	if err != nil {
@@ -32,6 +31,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	} else {
-		fmt.Printf("Successfully scheduled %s\n", jobId)
+		fmt.Printf("Successfully scheduled %s to queue %s\n", jobId, queue)
 	}
 }

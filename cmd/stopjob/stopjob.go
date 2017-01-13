@@ -1,29 +1,33 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/GeorgeNagel/goless/qconn"
 )
 
 func main() {
-	connPool, err := qconn.NewQPool("localhost", "6380", "test_queue", "test-worker")
+	var queue string
+	var jobId string
+	flag.StringVar(&queue, "q", "test", "queue name")
+	flag.StringVar(&jobId, "j", "", "job ID")
+	flag.Parse()
+
+	if jobId == "" {
+		log.Fatal("Must provide a Job ID")
+	}
+
+	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	if len(os.Args) < 2 {
-		log.Fatal("Must specify job id.")
-	}
-
-	jobId := os.Args[1]
 
 	err = connPool.StopJob(jobId)
 	if err != nil {
 		log.Fatal(err)
 	} else {
-		fmt.Printf("Successfully stopped %s\n", jobId)
+		fmt.Printf("Successfully stopped %s on queue %s\n", jobId, queue)
 	}
 }

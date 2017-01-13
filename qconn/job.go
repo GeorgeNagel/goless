@@ -23,7 +23,7 @@ func (job *Job) Run(connPool *QPool, counter *JobCounter) {
 	for i := 0; i < 10; i++ {
 		select {
 		case _ = <-heartbeatPhone:
-			fmt.Printf("[%s]Heart stopped. Killing job.\n", job.id)
+			fmt.Printf("[%s] Heart stopped. Killing job.\n", job.id)
 			return
 		default:
 			fmt.Printf("[%s] Doing a unit of work\n", job.id)
