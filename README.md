@@ -4,7 +4,7 @@ Goless is a Go client for [Qless](https://github.com/seomoz/qless).
 ## Start the redis server
 
 ```bash
-redis-server -p 6380 &
+redis-server --port 6380 &
 ```
 
 ## Build and run the worker

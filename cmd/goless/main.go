@@ -17,18 +17,19 @@ func main() {
 	}
 	queue := os.Args[1]
 
-	string_max_jobs := os.Getenv("MAX_JOBS")
+	envMaxJobs := os.Getenv("MAX_JOBS")
 
-	var MAX_JOBS = 2
-	if string_max_jobs != "" {
-		MAX_JOBS, err := strconv.Atoi(string_max_jobs)
+	var maxJobs = 2
+	var err error
+	if envMaxJobs != "" {
+		maxJobs, err = strconv.Atoi(envMaxJobs)
 
 		if err != nil {
-			log.Fatalf("Invlid MAX_JOBS count: %s, %v \n", string_max_jobs, err)
+			log.Fatalf("[manager] Invlid MAX_JOBS count: %s, %v \n", envMaxJobs, err)
 		}
 	}
 
-	fmt.Printf("Current max jobs: %s \n", MAX_JOBS)
+	fmt.Printf("[manager] Current max jobs: %d \n", maxJobs)
 
 	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
 
@@ -41,7 +42,7 @@ func main() {
 	for {
 		fmt.Printf("[manager] Number of jobs running: %d\n", numberOfJobsMutex.Read())
 		// Get job params
-		if numberOfJobsMutex.Read() >= MAX_JOBS {
+		if numberOfJobsMutex.Read() >= maxJobs {
 			fmt.Println("[manager] Running jobs at maximum capacity.")
 			time.Sleep(10 * time.Second)
 			continue
