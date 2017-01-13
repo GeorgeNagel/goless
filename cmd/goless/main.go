@@ -13,32 +13,7 @@ import (
 )
 
 func main() {
-	var queue string
-	flag.StringVar(&queue, "q", "test", "queue name")
-	flag.Parse()
-	fmt.Printf("[manager] Using queue %s\n", queue)
-
-	envMaxJobs := os.Getenv("MAX_JOBS")
-	envRedisHost := os.Getenv("REDIS_HOST")
-	envRedisPort := os.Getenv("REDIS_PORT")
-
-	var maxJobs = 2
-	var err error
-	if envMaxJobs != "" {
-		maxJobs, err = strconv.Atoi(envMaxJobs)
-
-		if err != nil {
-			log.Fatalf("[manager] Invlid MAX_JOBS count: %s, %v\n", envMaxJobs, err)
-		}
-	}
-	var redisHost = "localhost"
-	if envRedisHost != "" {
-		redisHost = envRedisHost
-	}
-	var redisPort = "6380"
-	if envRedisPort != "" {
-		redisPort = envRedisPort
-	}
+	queue, maxJobs, redisHost, redisPort := parseArgs()
 
 	fmt.Printf("[manager] Current max jobs: %d\n", maxJobs)
 
@@ -72,4 +47,34 @@ func main() {
 
 		go job.Run(connPool, numberOfJobsMutex)
 	}
+}
+
+func parseArgs() (string, int, string, string) {
+	var queue string
+	flag.StringVar(&queue, "q", "test", "queue name")
+	flag.Parse()
+	fmt.Printf("[manager] Using queue %s\n", queue)
+
+	envMaxJobs := os.Getenv("MAX_JOBS")
+	envRedisHost := os.Getenv("REDIS_HOST")
+	envRedisPort := os.Getenv("REDIS_PORT")
+
+	var maxJobs = 2
+	var err error
+	if envMaxJobs != "" {
+		maxJobs, err = strconv.Atoi(envMaxJobs)
+
+		if err != nil {
+			log.Fatalf("[manager] Invlid MAX_JOBS count: %s, %v\n", envMaxJobs, err)
+		}
+	}
+	var redisHost = "localhost"
+	if envRedisHost != "" {
+		redisHost = envRedisHost
+	}
+	var redisPort = "6380"
+	if envRedisPort != "" {
+		redisPort = envRedisPort
+	}
+	return queue, maxJobs, redisHost, redisPort
 }
