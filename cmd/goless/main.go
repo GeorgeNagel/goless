@@ -19,6 +19,8 @@ func main() {
 	fmt.Printf("[manager] Using queue %s\n", queue)
 
 	envMaxJobs := os.Getenv("MAX_JOBS")
+	envRedisHost := os.Getenv("REDIS_HOST")
+	envRedisPort := os.Getenv("REDIS_PORT")
 
 	var maxJobs = 2
 	var err error
@@ -29,10 +31,18 @@ func main() {
 			log.Fatalf("[manager] Invlid MAX_JOBS count: %s, %v\n", envMaxJobs, err)
 		}
 	}
+	var redisHost = "localhost"
+	if envRedisHost != "" {
+		redisHost = envRedisHost
+	}
+	var redisPort = "6380"
+	if envRedisPort != "" {
+		redisPort = envRedisPort
+	}
 
 	fmt.Printf("[manager] Current max jobs: %d\n", maxJobs)
 
-	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
+	connPool, err := qconn.NewQPool(redisHost, redisPort, queue, "test-worker")
 
 	if err != nil {
 		log.Fatal(err)
