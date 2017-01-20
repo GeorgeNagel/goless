@@ -11,7 +11,7 @@ type Job struct {
 	data string
 }
 
-func (job *Job) Run(connPool *QPool, counter *JobCounter) {
+func (job *Job) Run(connPool *QPool, counter *JobCounter, fnToRun func(string, chan string) (string, error)) {
 	heartbeatPhone := make(chan string)
 	defer close(heartbeatPhone)
 
@@ -19,26 +19,27 @@ func (job *Job) Run(connPool *QPool, counter *JobCounter) {
 	counter.Incr()
 	defer counter.Decr()
 
-	// pretend to do actual work
-	for i := 0; i < 10; i++ {
-		select {
-		case _ = <-heartbeatPhone:
-			fmt.Printf("[%s] Heart stopped. Killing job.\n", job.id)
-			return
-		default:
-			fmt.Printf("[%s] Doing a unit of work\n", job.id)
-			time.Sleep(2 * time.Second)
-		}
+	status, err := fnToRun(job.data, heartbeatPhone)
+	if err != nil {
+		fmt.Println("[%s] ERROR: %s", job.id, err.Error)
 	}
 
-	// Finish the Job
-	// Stop heartbeater before telling qless server that we're done
-	// in order to avoid heartbeating for a completed job
-	result, err := connPool.CompleteJob(job)
-	if err != nil {
-		fmt.Printf("[%s] Bad complete: %s\n", job.id, err)
+	if status == "success" {
+		// Finish the Job
+		// Stop heartbeater before telling qless server that we're done
+		// in order to avoid heartbeating for a completed job
+		result, err := connPool.CompleteJob(job)
+		if err != nil {
+			fmt.Printf("[%s] Bad complete: %s\n", job.id, err)
+		}
+		fmt.Printf("[%s] %s\n", job.id, result)
+	} else {
+		result, err := connPool.FailJob(job, "failed test jobs", "test-fail-message")
+		if err != nil {
+			fmt.Printf("[%s] Bad failed: %s\n", job.id, err)
+		}
+		fmt.Printf("[%s] %s\n", job.id, result)
 	}
-	fmt.Printf("[%s] %s\n", job.id, result)
 }
 
 func (job *Job) Heartbeat(connPool *QPool, beatPeriod int, heartbeatPhone chan string) {

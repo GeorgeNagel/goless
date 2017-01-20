@@ -99,14 +99,14 @@ func (connPool *QPool) CompleteJob(job *Job) (string, error) {
 	return result, err
 }
 
-func (connPool *QPool) FailJob(job *Job, group string, message string) error {
+func (connPool *QPool) FailJob(job *Job, group string, message string) (string, error) {
 	conn := connPool.Pool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	_, err := conn.Do("EVALSHA", connPool.ScriptSha, 0, "fail", seconds, job.id, connPool.WorkerName, group, message, job.data)
-	return err
+	result, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "fail", seconds, job.id, connPool.WorkerName, group, message, job.data))
+	return result, err
 }
 
 func (connPool *QPool) ScheduleJob(queue string, jobId string, klass string, data string, delay string) error {
