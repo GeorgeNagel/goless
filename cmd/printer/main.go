@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/GeorgeNagel/goless/goless"
+	"time"
 )
 
 func main() {
@@ -10,6 +11,15 @@ func main() {
 }
 
 func doWork(jobData string, heartbeatPhone chan string) (string, error) {
-	fmt.Println("YOLO")
+	for i := 0; i < 20; i++ {
+		select {
+		case <-heartbeatPhone:
+			fmt.Println("Job canceled stopping work")
+			return "canceled", nil
+		default:
+			fmt.Println("YOLO")
+			time.Sleep(1 * time.Second)
+		}
+	}
 	return "success", nil
 }

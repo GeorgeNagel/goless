@@ -33,6 +33,10 @@ func (job *Job) Run(connPool *QPool, counter *JobCounter, fnToRun func(string, c
 			fmt.Printf("[%s] Bad complete: %s\n", job.id, err)
 		}
 		fmt.Printf("[%s] %s\n", job.id, result)
+	} else if status == "canceled" {
+		// Job received canceled heartbeat
+		fmt.Printf("[%s] Canceled\n", job.id)
+		return
 	} else {
 		result, err := connPool.FailJob(job, "failed test jobs", "test-fail-message")
 		if err != nil {
