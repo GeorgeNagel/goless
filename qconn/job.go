@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+// Job return codes
+const Success = "successful"
+const Canceled = "canceled"
+const Failed = "failed"
+
 type Job struct {
 	id   string
 	data string
@@ -24,7 +29,7 @@ func (job *Job) Run(connPool *QPool, counter *JobCounter, fnToRun func(string, c
 		fmt.Println("[%s] ERROR: %s", job.id, err.Error)
 	}
 
-	if status == "success" {
+	if status == Success {
 		// Finish the Job
 		// Stop heartbeater before telling qless server that we're done
 		// in order to avoid heartbeating for a completed job
@@ -33,12 +38,17 @@ func (job *Job) Run(connPool *QPool, counter *JobCounter, fnToRun func(string, c
 			fmt.Printf("[%s] Bad complete: %s\n", job.id, err)
 		}
 		fmt.Printf("[%s] %s\n", job.id, result)
-	} else if status == "canceled" {
+	} else if status == Canceled {
 		// Job received canceled heartbeat
 		fmt.Printf("[%s] Canceled\n", job.id)
-		return
-	} else {
+	} else if status == Failed {
 		result, err := connPool.FailJob(job, "failed test jobs", "test-fail-message")
+		if err != nil {
+			fmt.Printf("[%s] Bad failed: %s\n", job.id, err)
+		}
+		fmt.Printf("[%s] %s\n", job.id, result)
+	} else {
+		result, err := connPool.FailJob(job, "invalid status response", fmt.Sprintf("Status: %s", status))
 		if err != nil {
 			fmt.Printf("[%s] Bad failed: %s\n", job.id, err)
 		}
