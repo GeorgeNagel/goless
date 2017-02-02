@@ -33,19 +33,19 @@ func RunWorker(fnToRun func(string, chan string) (string, error)) {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		job, err := connPool.PopJob()
+		jobMetadata, err := connPool.PopJob()
 
 		if err != nil {
 			log.Fatal(err)
 		}
-		if job == nil {
+		if jobMetadata == nil {
 			fmt.Printf("[manager] Job queue %s empty\n", connPool.Queue)
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		fmt.Printf("[manager] About to run: %s\n", job)
+		fmt.Printf("[manager] About to run: %s\n", jobMetadata.Id)
 
-		go job.Run(connPool, numberOfJobsMutex, fnToRun)
+		go qconn.RunJob(connPool, jobMetadata, numberOfJobsMutex, fnToRun)
 	}
 }
 

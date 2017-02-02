@@ -41,7 +41,7 @@ func NewQPool(hostname string, port string, queue string, workerName string) (*Q
 	return &QPool{Pool: pool, Queue: queue, ScriptSha: sha, WorkerName: workerName}, nil
 }
 
-func (pool *QPool) PopJob() (*Job, error) {
+func (pool *QPool) PopJob() (*JobMetadata, error) {
 	conn := pool.Pool.Get()
 	defer conn.Close()
 
@@ -75,37 +75,37 @@ func (pool *QPool) PopJob() (*Job, error) {
 	if !ok {
 		log.Fatal("Job data not a string!")
 	}
-	var job Job = Job{id: jobId, data: dataString}
+	var job JobMetadata = JobMetadata{Id: jobId, Data: dataString}
 	return &job, err
 }
 
-func (connPool *QPool) Heartbeat(job *Job) (int64, error) {
+func (connPool *QPool) Heartbeat(jobMetadata *JobMetadata) (int64, error) {
 	conn := connPool.Pool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.Int64(conn.Do("EVALSHA", connPool.ScriptSha, 0, "heartbeat", seconds, job.id, connPool.WorkerName, job.data))
+	result, err := redis.Int64(conn.Do("EVALSHA", connPool.ScriptSha, 0, "heartbeat", seconds, jobMetadata.Id, connPool.WorkerName, jobMetadata.Data))
 	return result, err
 }
 
-func (connPool *QPool) CompleteJob(job *Job) (string, error) {
+func (connPool *QPool) CompleteJob(jobMetadata *JobMetadata) (string, error) {
 	conn := connPool.Pool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "complete", seconds, job.id, connPool.WorkerName, connPool.Queue, job.data))
+	result, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "complete", seconds, jobMetadata.Id, connPool.WorkerName, connPool.Queue, jobMetadata.Data))
 	return result, err
 }
 
-func (connPool *QPool) FailJob(job *Job, group string, message string) (string, error) {
+func (connPool *QPool) FailJob(jobMetadata *JobMetadata, group string, message string) (string, error) {
 	conn := connPool.Pool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "fail", seconds, job.id, connPool.WorkerName, group, message, job.data))
+	result, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "fail", seconds, jobMetadata.Id, connPool.WorkerName, group, message, jobMetadata.Data))
 	return result, err
 }
 
