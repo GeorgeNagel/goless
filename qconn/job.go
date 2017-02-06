@@ -12,15 +12,16 @@ const Canceled = "canceled"
 const Failed = "failed"
 
 type JobMetadata struct {
-	Id   string
-	Data string
+	Id    string
+	Data  string
+	Queue string
 }
 
-func RunJob(connPool *QPool, jobMetadata *JobMetadata, counter *JobCounter, fnToRun func(string, chan string) (string, error)) {
+func RunJob(qless *Qless, workerName string, heartBeatPeriod int, jobMetadata *JobMetadata, counter *JobCounter, fnToRun func(string, chan string) (string, error)) {
 	heartbeatPhone := make(chan string)
 	defer close(heartbeatPhone)
 
-	go RunHeartbeat(connPool, jobMetadata, 5, heartbeatPhone)
+	go RunHeartbeat(qless, workerName, jobMetadata, heartBeatPeriod, heartbeatPhone)
 	counter.Incr()
 	defer counter.Decr()
 
@@ -33,7 +34,7 @@ func RunJob(connPool *QPool, jobMetadata *JobMetadata, counter *JobCounter, fnTo
 		// Finish the Job
 		// Stop heartbeater before telling qless server that we're done
 		// in order to avoid heartbeating for a completed job
-		result, err := connPool.CompleteJob(jobMetadata)
+		result, err := qless.CompleteJob(workerName, jobMetadata)
 		if err != nil {
 			fmt.Printf("[%s] Bad complete: %s\n", jobMetadata.Id, err)
 		}
@@ -42,13 +43,13 @@ func RunJob(connPool *QPool, jobMetadata *JobMetadata, counter *JobCounter, fnTo
 		// Job received canceled heartbeat
 		fmt.Printf("[%s] Canceled\n", jobMetadata.Id)
 	} else if status == Failed {
-		result, err := connPool.FailJob(jobMetadata, "failed test jobs", "test-fail-message")
+		result, err := qless.FailJob(workerName, jobMetadata, "failed test jobs", "test-fail-message")
 		if err != nil {
 			fmt.Printf("[%s] Bad failed: %s\n", jobMetadata.Id, err)
 		}
 		fmt.Printf("[%s] %s\n", jobMetadata.Id, result)
 	} else {
-		result, err := connPool.FailJob(jobMetadata, "invalid status response", fmt.Sprintf("Status: %s", status))
+		result, err := qless.FailJob(workerName, jobMetadata, "invalid status response", fmt.Sprintf("Status: %s", status))
 		if err != nil {
 			fmt.Printf("[%s] Bad failed: %s\n", jobMetadata.Id, err)
 		}
@@ -56,7 +57,7 @@ func RunJob(connPool *QPool, jobMetadata *JobMetadata, counter *JobCounter, fnTo
 	}
 }
 
-func RunHeartbeat(connPool *QPool, jobMetadata *JobMetadata, beatPeriod int, heartbeatPhone chan string) {
+func RunHeartbeat(qless *Qless, workerName string, jobMetadata *JobMetadata, beatPeriod int, heartbeatPhone chan string) {
 	for {
 		time.Sleep(time.Duration(beatPeriod) * time.Second)
 
@@ -69,7 +70,7 @@ func RunHeartbeat(connPool *QPool, jobMetadata *JobMetadata, beatPeriod int, hea
 			return
 		default:
 			fmt.Printf("[%s] Heartbeating\n", jobMetadata.Id)
-			_, err := connPool.Heartbeat(jobMetadata)
+			_, err := qless.Heartbeat(workerName, jobMetadata)
 			if err != nil {
 				errMessage := err.Error()
 

@@ -11,7 +11,8 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-func newRedisPool(addr string) *redis.Pool {
+func NewRedisPool(hostname string, port string) *redis.Pool {
+	addr := fmt.Sprintf("%s:%s", hostname, port)
 	return &redis.Pool{
 		MaxIdle:     0,
 		Wait:        true,
@@ -21,33 +22,28 @@ func newRedisPool(addr string) *redis.Pool {
 	}
 }
 
-type QPool struct {
-	Pool       *redis.Pool
-	Queue      string
-	ScriptSha  string
-	WorkerName string
-}
-
-func NewQPool(hostname string, port string, queue string, workerName string) (*QPool, error) {
-	pool := newRedisPool(fmt.Sprintf("%s:%s", hostname, port))
-	conn := pool.Get()
+// Do one-time setup of redis node to load in Lua scripts.
+// Required once during redis lifecycle before any qless commands may be run.
+func SetupQlessLua(redisPool *redis.Pool) (string, error) {
+	conn := redisPool.Get()
 	defer conn.Close()
 
 	sha, err := loadLuaScript(luaScript, conn)
-	if err != nil {
-		return nil, err
-	}
-
-	return &QPool{Pool: pool, Queue: queue, ScriptSha: sha, WorkerName: workerName}, nil
+	return sha, err
 }
 
-func (pool *QPool) PopJob() (*JobMetadata, error) {
-	conn := pool.Pool.Get()
+type Qless struct {
+	ScriptSha string
+	RedisPool *redis.Pool
+}
+
+func (qless *Qless) PopJob(queueName string, workerName string) (*JobMetadata, error) {
+	conn := qless.RedisPool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.Bytes(conn.Do("EVALSHA", pool.ScriptSha, 0, "pop", seconds, pool.Queue, pool.WorkerName, 1))
+	result, err := redis.Bytes(conn.Do("EVALSHA", qless.ScriptSha, 0, "pop", seconds, queueName, workerName, 1))
 	if bytes.Compare(result, []byte("{}")) == 0 {
 		// No jobs on the queue
 		return nil, nil
@@ -79,53 +75,53 @@ func (pool *QPool) PopJob() (*JobMetadata, error) {
 	return &job, err
 }
 
-func (connPool *QPool) Heartbeat(jobMetadata *JobMetadata) (int64, error) {
-	conn := connPool.Pool.Get()
+func (qless *Qless) Heartbeat(workerName string, jobMetadata *JobMetadata) (int64, error) {
+	conn := qless.RedisPool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.Int64(conn.Do("EVALSHA", connPool.ScriptSha, 0, "heartbeat", seconds, jobMetadata.Id, connPool.WorkerName, jobMetadata.Data))
+	result, err := redis.Int64(conn.Do("EVALSHA", qless.ScriptSha, 0, "heartbeat", seconds, jobMetadata.Id, workerName, jobMetadata.Data))
 	return result, err
 }
 
-func (connPool *QPool) CompleteJob(jobMetadata *JobMetadata) (string, error) {
-	conn := connPool.Pool.Get()
+func (qless *Qless) CompleteJob(workerName string, jobMetadata *JobMetadata) (string, error) {
+	conn := qless.RedisPool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "complete", seconds, jobMetadata.Id, connPool.WorkerName, connPool.Queue, jobMetadata.Data))
+	result, err := redis.String(conn.Do("EVALSHA", qless.ScriptSha, 0, "complete", seconds, jobMetadata.Id, workerName, jobMetadata.Queue, jobMetadata.Data))
 	return result, err
 }
 
-func (connPool *QPool) FailJob(jobMetadata *JobMetadata, group string, message string) (string, error) {
-	conn := connPool.Pool.Get()
+func (qless *Qless) FailJob(workerName string, jobMetadata *JobMetadata, group string, message string) (string, error) {
+	conn := qless.RedisPool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	result, err := redis.String(conn.Do("EVALSHA", connPool.ScriptSha, 0, "fail", seconds, jobMetadata.Id, connPool.WorkerName, group, message, jobMetadata.Data))
+	result, err := redis.String(conn.Do("EVALSHA", qless.ScriptSha, 0, "fail", seconds, jobMetadata.Id, workerName, group, message, jobMetadata.Data))
 	return result, err
 }
 
-func (connPool *QPool) ScheduleJob(queue string, jobId string, klass string, data string, delay string) error {
-	conn := connPool.Pool.Get()
+func (qless *Qless) ScheduleJob(queue string, jobId string, klass string, data string, delay string) error {
+	conn := qless.RedisPool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	_, err := conn.Do("EVALSHA", connPool.ScriptSha, 0, "put", seconds, "me", queue, jobId, klass, data, delay)
+	_, err := conn.Do("EVALSHA", qless.ScriptSha, 0, "put", seconds, "me", queue, jobId, klass, data, delay)
 	return err
 }
 
-func (connPool *QPool) StopJob(jobId string) error {
-	conn := connPool.Pool.Get()
+func (qless *Qless) StopJob(jobId string) error {
+	conn := qless.RedisPool.Get()
 	defer conn.Close()
 
 	now := time.Now()
 	seconds := now.Unix()
-	_, err := conn.Do("EVALSHA", connPool.ScriptSha, 0, "cancel", seconds, jobId)
+	_, err := conn.Do("EVALSHA", qless.ScriptSha, 0, "cancel", seconds, jobId)
 	return err
 }
 

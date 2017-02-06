@@ -3,11 +3,25 @@ package main
 import (
 	"fmt"
 	"github.com/GeorgeNagel/goless/goless"
+	"github.com/GeorgeNagel/goless/qconn"
+	"log"
 	"time"
 )
 
 func main() {
-	goless.RunWorker(doWork)
+	config := goless.ConfFromEnvAndFlags()
+	redisPool := qconn.NewRedisPool(config.RedisHost, config.RedisPort)
+	scriptSha, err := qconn.SetupQlessLua(redisPool)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	qless := qconn.Qless{
+		ScriptSha: scriptSha,
+		RedisPool: redisPool,
+	}
+
+	goless.PollJobQueue(&qless, config, doWork)
 }
 
 func doWork(jobData string, heartbeatPhone chan string) (string, error) {

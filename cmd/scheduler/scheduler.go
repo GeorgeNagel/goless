@@ -16,9 +16,15 @@ func main() {
 	flag.StringVar(&queue, "q", "test", "queue name")
 	flag.Parse()
 
-	connPool, err := qconn.NewQPool("localhost", "6380", queue, "test-worker")
+	redisPool := qconn.NewRedisPool("localhost", "6380")
+	scriptSha, err := qconn.SetupQlessLua(redisPool)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	qless := qconn.Qless{
+		ScriptSha: scriptSha,
+		RedisPool: redisPool,
 	}
 
 	uuid := uuid.NewV4().String()
@@ -27,7 +33,8 @@ func main() {
 	data := "{\"foo\": true}"
 	klass := "Fake::Ruby::Class"
 	delay := "0"
-	err = connPool.ScheduleJob(queue, jobId, klass, data, delay)
+
+	err = qless.ScheduleJob(queue, jobId, klass, data, delay)
 	if err != nil {
 		log.Fatal(err)
 	} else {
